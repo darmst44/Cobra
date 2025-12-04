@@ -1,0 +1,665 @@
+"""
+Cobra Slime Elite - A Snake Game
+Made with PyGame
+
+This module implements a classic snake game with customizable difficulty
+and multiple food items on screen.
+"""
+
+import sys
+import random
+import pygame
+
+# Constants
+FRAME_SIZE_X = 720
+FRAME_SIZE_Y = 480
+GRID_SIZE = 10
+
+# Color definitions
+BLACK = pygame.Color(0, 0, 0)
+WHITE = pygame.Color(255, 255, 255)
+RED = pygame.Color(255, 0, 0)
+GREEN = pygame.Color(0, 255, 0)
+BLUE = pygame.Color(0, 0, 255)
+YELLOW = pygame.Color(255, 255, 0)
+CYAN = pygame.Color(0, 255, 255)
+DARK_GRAY = pygame.Color(30, 30, 30)
+LIGHT_GRAY = pygame.Color(50, 50, 50)
+DARK_GREEN = pygame.Color(0, 100, 0)
+DARK_BLUE = pygame.Color(0, 0, 100)
+PURPLE = pygame.Color(100, 0, 100)
+
+# Background themes
+BACKGROUND_THEMES = {
+    "Classic Grid": {
+        "bg_color": BLACK,
+        "grid_color": DARK_GRAY,
+        "pattern": "grid"
+    },
+    "Dotted": {
+        "bg_color": BLACK,
+        "grid_color": DARK_GRAY,
+        "pattern": "dots"
+    },
+    "Matrix": {
+        "bg_color": BLACK,
+        "grid_color": DARK_GREEN,
+        "pattern": "grid"
+    },
+    "Ocean": {
+        "bg_color": DARK_BLUE,
+        "grid_color": BLUE,
+        "pattern": "waves"
+    },
+    "Neon": {
+        "bg_color": BLACK,
+        "grid_color": PURPLE,
+        "pattern": "checkerboard"
+    }
+}
+
+# Difficulty settings mapped to FPS
+DIFFICULTIES = {
+    "Easy": 10,
+    "Medium": 25,
+    "Hard": 40,
+    "Harder": 60,
+    "Impossible": 120
+}
+
+
+def initialize_game():
+    """Initialize pygame and create the game window."""
+    check_errors = pygame.init()
+    if check_errors[1] > 0:
+        print(f'[!] Had {check_errors[1]} errors when initialising game, exiting...')
+        sys.exit(-1)
+    print('[+] Game successfully initialised')
+    
+    pygame.display.set_caption('Cobra Slime Elite')
+    game_window = pygame.display.set_mode((FRAME_SIZE_X, FRAME_SIZE_Y))
+    return game_window
+
+
+def spawn_food():
+    """
+    Spawn a new food item at a random grid position.
+    
+    Returns:
+        List[int]: [x, y] coordinates of the food position
+    """
+    x = random.randrange(1, (FRAME_SIZE_X // GRID_SIZE)) * GRID_SIZE
+    y = random.randrange(1, (FRAME_SIZE_Y // GRID_SIZE)) * GRID_SIZE
+    return [x, y]
+
+
+def spawn_star():
+    """
+    Spawn a star powerup at a random grid position.
+    
+    Returns:
+        List[int]: [x, y] coordinates of the star position
+    """
+    x = random.randrange(1, (FRAME_SIZE_X // GRID_SIZE)) * GRID_SIZE
+    y = random.randrange(1, (FRAME_SIZE_Y // GRID_SIZE)) * GRID_SIZE
+    return [x, y]
+
+
+def draw_background(game_window, theme_name):
+    """
+    Draw the background pattern based on selected theme.
+    
+    Args:
+        game_window: Pygame display surface
+        theme_name: Name of the background theme
+    """
+    theme = BACKGROUND_THEMES[theme_name]
+    bg_color = theme["bg_color"]
+    grid_color = theme["grid_color"]
+    pattern = theme["pattern"]
+    
+    # Fill base color
+    game_window.fill(bg_color)
+    
+    if pattern == "grid":
+        # Draw grid lines
+        for x in range(0, FRAME_SIZE_X, GRID_SIZE):
+            pygame.draw.line(game_window, grid_color, (x, 0), (x, FRAME_SIZE_Y), 1)
+        for y in range(0, FRAME_SIZE_Y, GRID_SIZE):
+            pygame.draw.line(game_window, grid_color, (0, y), (FRAME_SIZE_X, y), 1)
+    
+    elif pattern == "dots":
+        # Draw dots at grid intersections
+        for x in range(0, FRAME_SIZE_X, GRID_SIZE):
+            for y in range(0, FRAME_SIZE_Y, GRID_SIZE):
+                pygame.draw.circle(game_window, grid_color, (x, y), 2)
+    
+    elif pattern == "checkerboard":
+        # Draw checkerboard pattern
+        for x in range(0, FRAME_SIZE_X, GRID_SIZE * 2):
+            for y in range(0, FRAME_SIZE_Y, GRID_SIZE * 2):
+                pygame.draw.rect(game_window, grid_color, 
+                               pygame.Rect(x, y, GRID_SIZE, GRID_SIZE))
+                pygame.draw.rect(game_window, grid_color,
+                               pygame.Rect(x + GRID_SIZE, y + GRID_SIZE, GRID_SIZE, GRID_SIZE))
+    
+    elif pattern == "waves":
+        # Draw wavy horizontal lines
+        for y in range(0, FRAME_SIZE_Y, GRID_SIZE * 2):
+            points = []
+            for x in range(0, FRAME_SIZE_X, 5):
+                wave_y = y + int(3 * pygame.math.Vector2(1, 0).rotate(x * 2).y)
+                points.append((x, wave_y))
+            if len(points) > 1:
+                pygame.draw.lines(game_window, grid_color, False, points, 1)
+
+
+def draw_star(game_window, pos):
+    """
+    Draw a star shape at the given position.
+    
+    Args:
+        game_window: Pygame display surface
+        pos: [x, y] position to draw the star
+    """
+    # Star points (5-pointed star)
+    center_x = pos[0] + GRID_SIZE // 2
+    center_y = pos[1] + GRID_SIZE // 2
+    outer_radius = GRID_SIZE // 2
+    inner_radius = GRID_SIZE // 4
+    
+    points = []
+    for i in range(10):
+        angle = (i * 36 - 90) * 3.14159 / 180  # Convert to radians
+        if i % 2 == 0:
+            radius = outer_radius
+        else:
+            radius = inner_radius
+        x = center_x + radius * pygame.math.Vector2(1, 0).rotate(i * 36).x
+        y = center_y + radius * pygame.math.Vector2(1, 0).rotate(i * 36).y
+        points.append((x, y))
+    
+    pygame.draw.polygon(game_window, YELLOW, points)
+
+
+def show_score(game_window, score, choice, color, font_name, size, invincible=False, invincible_time=0):
+    """
+    Display the current score on the screen.
+    
+    Args:
+        game_window: Pygame display surface
+        score: Current game score
+        choice: Position mode (1=top-left, 2=center, other=bottom-center)
+        color: Text color
+        font_name: Font family name
+        size: Font size in points
+        invincible: Whether player is currently invincible
+        invincible_time: Time remaining in invincibility (seconds)
+    """
+    score_font = pygame.font.SysFont(font_name, size)
+    score_surface = score_font.render(f'Score : {score}', True, color)
+    score_rect = score_surface.get_rect()
+    
+    if choice == 1:
+        score_rect.midtop = (FRAME_SIZE_X / 10, 15)
+    elif choice == 2:
+        score_rect.midtop = (FRAME_SIZE_X / 2, FRAME_SIZE_Y / 2 - 30)
+    else:
+        score_rect.midtop = (FRAME_SIZE_X / 2, FRAME_SIZE_Y / 1.25)
+    
+    game_window.blit(score_surface, score_rect)
+    
+    # Show invincibility status
+    if invincible and choice == 1:
+        invincible_font = pygame.font.SysFont(font_name, size)
+        invincible_text = f'INVINCIBLE: {invincible_time:.1f}s'
+        invincible_surface = invincible_font.render(invincible_text, True, CYAN)
+        invincible_rect = invincible_surface.get_rect()
+        invincible_rect.midtop = (FRAME_SIZE_X / 2, 15)
+        game_window.blit(invincible_surface, invincible_rect)
+
+
+def game_over_screen(game_window, score):
+    """
+    Display the game over screen with restart/quit options.
+    
+    Args:
+        game_window: Pygame display surface
+        score: Final game score
+        
+    Returns:
+        str: User choice ('restart', 'home', or exits directly)
+    """
+    my_font = pygame.font.SysFont('consolas', 90)
+    small_font = pygame.font.SysFont('consolas', 30)
+    
+    while True:
+        game_window.fill(BLACK)
+        
+        # Game Over text
+        game_over_surface = my_font.render('GAME OVER :(', True, RED)
+        game_over_rect = game_over_surface.get_rect()
+        game_over_rect.midtop = (FRAME_SIZE_X / 2, FRAME_SIZE_Y / 4)
+        game_window.blit(game_over_surface, game_over_rect)
+        
+        # Show final score
+        show_score(game_window, score, 2, RED, 'consolas', 35)
+        
+        # Menu options
+        options = [
+            ('ENTER = Restart', 350),
+            ('H = Home Menu', 390),
+            ('ESC = Quit', 430)
+        ]
+        
+        for text, y_pos in options:
+            text_surface = small_font.render(text, True, WHITE)
+            x_pos = FRAME_SIZE_X / 2 - text_surface.get_width() / 2
+            game_window.blit(text_surface, (x_pos, y_pos))
+        
+        pygame.display.flip()
+        
+        # Handle input
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    return 'restart'
+                if event.key == pygame.K_h:
+                    return 'home'
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+
+#Home Screen
+def home_screen(game_window):
+    """
+    Display the home screen with difficulty and apple count selection.
+    
+    Args:
+        game_window: Pygame display surface
+        
+    Returns:
+        Tuple[int, int, str]: (difficulty_fps, apple_count, background_theme)
+    """
+    menu_font = pygame.font.SysFont('consolas', 50)
+    small_font = pygame.font.SysFont('consolas', 30)
+
+    diff_names = list(DIFFICULTIES.keys())
+    diff_index = diff_names.index("Medium")
+    
+    # Apple count options: 1, 3, or 5
+    apple_options = [1, 3, 5]
+    apple_index = 0  # Start at 1
+    
+    # Background theme selection
+    theme_names = list(BACKGROUND_THEMES.keys())
+    theme_index = 0
+
+    while True:
+        game_window.fill(BLACK)
+
+        # Title
+        title_surface = menu_font.render("Cobra Slime Elite", True, GREEN)
+        title_x = FRAME_SIZE_X / 2 - title_surface.get_width() / 2
+        game_window.blit(title_surface, (title_x, 50))
+
+        # Settings display
+        diff_text = small_font.render(f"Difficulty: {diff_names[diff_index]}", True, WHITE)
+        diff_x = FRAME_SIZE_X / 2 - diff_text.get_width() / 2
+        game_window.blit(diff_text, (diff_x, 150))
+
+        apple_text = small_font.render(f"Apples on Screen: {apple_options[apple_index]}", True, WHITE)
+        apple_x = FRAME_SIZE_X / 2 - apple_text.get_width() / 2
+        game_window.blit(apple_text, (apple_x, 190))
+        
+        # Background theme display
+        theme_text = small_font.render(f"Background: {theme_names[theme_index]}", True, WHITE)
+        theme_x = FRAME_SIZE_X / 2 - theme_text.get_width() / 2
+        game_window.blit(theme_text, (theme_x, 230))
+
+        # Instructions
+        instructions = [
+            "LEFT / RIGHT = Change Difficulty",
+            "UP / DOWN = Change Apple Count (1, 3, 5)",
+            "A / D = Change Background Theme",
+            "ENTER = Start Game",
+            "ESC = Quit"
+        ]
+        
+        y_pos = 290
+        for line in instructions:
+            text_surface = small_font.render(line, True, BLUE)
+            x_pos = FRAME_SIZE_X / 2 - text_surface.get_width() / 2
+            game_window.blit(text_surface, (x_pos, y_pos))
+            y_pos += 35
+
+        pygame.display.update()
+
+        # Handle input
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                
+                # Difficulty selection
+                if event.key == pygame.K_LEFT:
+                    diff_index = (diff_index - 1) % len(diff_names)
+                elif event.key == pygame.K_RIGHT:
+                    diff_index = (diff_index + 1) % len(diff_names)
+                
+                # Apple count selection (cycle through 1, 3, 5)
+                elif event.key == pygame.K_UP:
+                    apple_index = (apple_index + 1) % len(apple_options)
+                elif event.key == pygame.K_DOWN:
+                    apple_index = (apple_index - 1) % len(apple_options)
+                
+                # Background theme selection
+                elif event.key == pygame.K_a:
+                    theme_index = (theme_index - 1) % len(theme_names)
+                elif event.key == pygame.K_d:
+                    theme_index = (theme_index + 1) % len(theme_names)
+                
+                # Start game
+                elif event.key == pygame.K_RETURN:
+                    return (DIFFICULTIES[diff_names[diff_index]], 
+                           apple_options[apple_index], 
+                           theme_names[theme_index])
+
+#Collision Detection
+def check_collision_with_food(snake_pos, food_positions):
+    """
+    Check if the snake head collides with any food item.
+    
+    Args:
+        snake_pos: Current position of snake head [x, y]
+        food_positions: List of food positions
+        
+    Returns:
+        int or None: Index of eaten food, or None if no collision
+    """
+    for i, food_pos in enumerate(food_positions):
+        if snake_pos[0] == food_pos[0] and snake_pos[1] == food_pos[1]:
+            return i
+    return None
+
+
+def is_out_of_bounds(snake_pos):
+    """
+    Check if the snake head is out of the game boundaries.
+    
+    Args:
+        snake_pos: Current position of snake head [x, y]
+        
+    Returns:
+        bool: True if out of bounds, False otherwise
+    """
+    return (snake_pos[0] < 0 or snake_pos[0] > FRAME_SIZE_X - GRID_SIZE or
+            snake_pos[1] < 0 or snake_pos[1] > FRAME_SIZE_Y - GRID_SIZE)
+
+
+def check_self_collision(snake_pos, snake_body):
+    """
+    Check if the snake head collides with its own body.
+    
+    Args:
+        snake_pos: Current position of snake head [x, y]
+        snake_body: List of snake body segment positions
+        
+    Returns:
+        bool: True if collision detected, False otherwise
+    """
+    for block in snake_body[1:]:
+        if snake_pos[0] == block[0] and snake_pos[1] == block[1]:
+            return True
+    return False
+
+#Direction and Movement
+def get_direction_change(event, current_direction):
+    """
+    Determine the new direction based on keyboard input.
+    
+    Args:
+        event: Pygame keyboard event
+        current_direction: Current snake direction
+        
+    Returns:
+        str: New direction or current direction if invalid move
+    """
+    direction_map = {
+        (pygame.K_UP, 'w'): 'UP',
+        (pygame.K_DOWN, 's'): 'DOWN',
+        (pygame.K_LEFT, 'a'): 'LEFT',
+        (pygame.K_RIGHT, 'd'): 'RIGHT'
+    }
+    
+    for keys, direction in direction_map.items():
+        if event.key in (keys[0], ord(keys[1])):
+            return direction
+    
+    return current_direction
+
+
+def update_snake_position(snake_pos, direction):
+    """
+    Update the snake's head position based on current direction.
+    
+    Args:
+        snake_pos: Current position of snake head [x, y]
+        direction: Current movement direction
+    """
+    if direction == 'UP':
+        snake_pos[1] -= GRID_SIZE
+    elif direction == 'DOWN':
+        snake_pos[1] += GRID_SIZE
+    elif direction == 'LEFT':
+        snake_pos[0] -= GRID_SIZE
+    elif direction == 'RIGHT':
+        snake_pos[0] += GRID_SIZE
+
+
+def is_valid_direction_change(new_direction, current_direction):
+    """
+    Check if the direction change is valid (not 180-degree turn).
+    
+    Args:
+        new_direction: Proposed new direction
+        current_direction: Current direction
+        
+    Returns:
+        bool: True if valid change, False otherwise
+    """
+    opposite_directions = {
+        'UP': 'DOWN',
+        'DOWN': 'UP',
+        'LEFT': 'RIGHT',
+        'RIGHT': 'LEFT'
+    }
+    
+    return opposite_directions.get(new_direction) != current_direction
+
+
+def draw_game(game_window, snake_body, food_positions, score, invincible, star_pos, invincible_time, background_theme):
+    """
+    Render all game elements on the screen.
+    
+    Args:
+        game_window: Pygame display surface
+        snake_body: List of snake body segment positions
+        food_positions: List of food positions
+        score: Current game score
+        invincible: Whether player is invincible
+        star_pos: Position of star powerup, or None if not active
+        invincible_time: Remaining invincibility time
+        background_theme: Name of the background theme to draw
+    """
+    # Draw background pattern
+    draw_background(game_window, background_theme)
+    
+    # Draw snake (change color if invincible)
+    snake_color = CYAN if invincible else GREEN
+    for pos in snake_body:
+        pygame.draw.rect(game_window, snake_color, 
+                        pygame.Rect(pos[0], pos[1], GRID_SIZE, GRID_SIZE))
+    
+    # Draw food
+    for food_pos in food_positions:
+        pygame.draw.rect(game_window, RED, 
+                        pygame.Rect(food_pos[0], food_pos[1], GRID_SIZE, GRID_SIZE))
+    
+    # Draw star if it exists
+    if star_pos is not None:
+        draw_star(game_window, star_pos)
+    
+    # Display score and invincibility status
+    show_score(game_window, score, 1, WHITE, 'consolas', 20, invincible, invincible_time)
+    pygame.display.update()
+
+
+def run_game_loop(game_window, difficulty, apple_count, background_theme):
+    """
+    Main game loop handling all game logic.
+    
+    Args:
+        game_window: Pygame display surface
+        difficulty: Game speed (FPS)
+        apple_count: Number of food items on screen
+        background_theme: Name of the background theme
+        
+    Returns:
+        str: Game result ('restart' or 'home')
+    """
+    # Initialize game state
+    snake_pos = [100, 50]
+    snake_body = [[100, 50], [90, 50], [80, 50]]
+    direction = 'RIGHT'
+    change_to = direction
+    score = 0
+    food_positions = [spawn_food() for _ in range(apple_count)]
+    
+    # Star powerup state (only active for multiple apples)
+    star_enabled = apple_count > 1
+    star_pos = None
+    star_direction = None
+    last_star_score = 0
+    invincible = False
+    invincible_start_time = 0
+    invincible_duration = 10.0  # 10 seconds
+    
+    fps_controller = pygame.time.Clock()
+    game_running = True
+    
+    while game_running:
+        # Event handling
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                else:
+                    change_to = get_direction_change(event, change_to)
+        
+        # Update direction if valid
+        if is_valid_direction_change(change_to, direction):
+            direction = change_to
+        
+        # Move snake
+        update_snake_position(snake_pos, direction)
+        snake_body.insert(0, list(snake_pos))
+        
+        # Check food collision
+        food_index = check_collision_with_food(snake_pos, food_positions)
+        if food_index is not None:
+            score += 1
+            food_positions[food_index] = spawn_food()
+            
+            # Spawn star every 10 points (only if multiple apples)
+            if star_enabled and score % 10 == 0 and score > last_star_score:
+                star_pos = spawn_star()
+                # Random direction for star movement
+                star_direction = random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT'])
+                last_star_score = score
+        else:
+            snake_body.pop()
+        
+        # Move the star
+        if star_pos is not None and star_direction is not None:
+            if star_direction == 'UP':
+                star_pos[1] -= GRID_SIZE
+            elif star_direction == 'DOWN':
+                star_pos[1] += GRID_SIZE
+            elif star_direction == 'LEFT':
+                star_pos[0] -= GRID_SIZE
+            elif star_direction == 'RIGHT':
+                star_pos[0] += GRID_SIZE
+            
+            # Bounce star off walls
+            if star_pos[0] < 0 or star_pos[0] >= FRAME_SIZE_X:
+                star_direction = 'RIGHT' if star_pos[0] < 0 else 'LEFT'
+                star_pos[0] = max(0, min(star_pos[0], FRAME_SIZE_X - GRID_SIZE))
+            
+            if star_pos[1] < 0 or star_pos[1] >= FRAME_SIZE_Y:
+                star_direction = 'DOWN' if star_pos[1] < 0 else 'UP'
+                star_pos[1] = max(0, min(star_pos[1], FRAME_SIZE_Y - GRID_SIZE))
+        
+        # Check star collision
+        if star_pos is not None:
+            if snake_pos[0] == star_pos[0] and snake_pos[1] == star_pos[1]:
+                invincible = True
+                invincible_start_time = pygame.time.get_ticks() / 1000.0
+                star_pos = None
+                star_direction = None
+        
+        # Update invincibility
+        if invincible:
+            current_time = pygame.time.get_ticks() / 1000.0
+            elapsed = current_time - invincible_start_time
+            if elapsed >= invincible_duration:
+                invincible = False
+        
+        # Calculate remaining invincibility time
+        invincible_time = 0
+        if invincible:
+            current_time = pygame.time.get_ticks() / 1000.0
+            invincible_time = invincible_duration - (current_time - invincible_start_time)
+        
+        # Draw everything
+        draw_game(game_window, snake_body, food_positions, score, invincible, 
+                 star_pos, invincible_time, background_theme)
+        
+        # Check game over conditions (skip if invincible)
+        if not invincible:
+            if is_out_of_bounds(snake_pos) or check_self_collision(snake_pos, snake_body):
+                return game_over_screen(game_window, score)
+        
+        # Control game speed
+        fps_controller.tick(difficulty)
+    
+    return 'home'
+
+
+def main():
+    """Main entry point for the game."""
+    game_window = initialize_game()
+    
+    while True:
+        difficulty, apple_count, background_theme = home_screen(game_window)
+        result = run_game_loop(game_window, difficulty, apple_count, background_theme)
+        
+        if result == 'home':
+            continue  # Go back to home screen
+        # If result is 'restart', loop continues and calls home_screen again
+
+
+if __name__ == '__main__':
+    main()
